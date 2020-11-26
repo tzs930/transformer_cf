@@ -132,7 +132,7 @@ def train(model, n_train, batch_size, nseq, train_data, epoch, criterion, optimi
 
 
 def evaluate(model, num_data, eval_batch_size, nseq, eval_data_tr, eval_data_te, criterion, mode='valid'):
-    # model.train() 
+    model.eval() 
     total_loss = 0.
 
     idxlist = np.arange(num_data)
@@ -220,7 +220,7 @@ def main():
     model = TransformerCF(ntokens, emsize, nhead, nhid, nlayers, nseq, dropout, use_posenc=True).to(device)
 
     criterion = torch.nn.BCELoss()
-    lr = 3. # Defualt : 5.0
+    lr = 10. # Defualt : 5.0
     optimizer = torch.optim.SGD(model.parameters(), lr=lr)
     # scheduler = None
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 0.1, gamma=0.95)

@@ -3,3 +3,5 @@ HetRec
 regacy
 wandb
 checkpoints
+__pycache__
+.data
