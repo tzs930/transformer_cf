@@ -105,12 +105,13 @@ def Recall_at_k_batch(X_pred, heldout_batch, k=100):
     return list(recall)
 
 
-def NDCG_score(X_pred, X_true_sparse, k=100):    
+def NDCG_score(X_pred, X_target, X_true_sparse, k=100):    
     nusers = X_pred.shape[0]
     X_true_orig = X_true_sparse.toarray()
     
     zero_pad = np.zeros([nusers,1])
     X_true = np.concatenate((zero_pad, X_true_orig), axis=-1)
+    X_true = np.logical_or(X_true, X_target.cpu()).float().numpy()
 
     ndcgs = []
     for u in range(nusers):
@@ -129,7 +130,7 @@ def NDCG_score(X_pred, X_true_sparse, k=100):
     return ndcgs
 
 
-def Recall_score(X_pred, X_true_sparse, k=100):
+def Recall_score(X_pred, X_target, X_true_sparse, k=100):
     nusers = X_pred.shape[0]
     
     idx = bn.argpartition(-X_pred, k, axis=1)
