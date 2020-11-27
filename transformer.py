@@ -41,17 +41,17 @@ class TransformerCF(nn.Module):
         self.decoder.bias.data.zero_()
         self.decoder.weight.data.uniform_(-initrange, initrange)
 
-    def forward(self, input):        
+    def forward(self, input, mask):        
         src = self.encoder(input)
 
         for layer in self.layers:
-            src = layer(src)
+            src = layer(src, src_key_padding_mask=mask)
 
         src = src.permute((1,0,2)).flatten(1,2)
         output = self.decoder(src)
 
         output = torch.sigmoid(output)
-        output = output.scatter(1, input.T, 1e-30) # Mask input array
+        # output = output.scatter(1, input.T, 1e-30) # Mask input array
         # out = output.cpu()
         # inp = input.cpu()
 

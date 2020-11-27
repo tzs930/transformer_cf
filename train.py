@@ -9,7 +9,7 @@ import math
 import os
 from tqdm import tqdm
 
-USE_WANDB = True
+USE_WANDB = False
 
 if USE_WANDB:
     import wandb
@@ -28,7 +28,8 @@ def get_train_batch(data, user_idx, seq_len=100, item_sample_rate=0.5):
     batches = torch.Tensor(data[user_idx].toarray()).to(device)     # [batch_size, ntokens-1]
     batches = torch.cat((zero_tokens, batches), 1)                  # [batch_size, ntokens]
     # batches = data[user_idx]
-    masked_batches = torch.clone(batches)
+    # masked_batches = torch.clone(batches)
+    input_masks = torch.ones([batch_size, seq_len]).to(device)
     # choose movie_seen and movie_to_be_seen (padding if input_size > num_movie_seen)
 
     for i in range(batch_size):        
@@ -40,18 +41,20 @@ def get_train_batch(data, user_idx, seq_len=100, item_sample_rate=0.5):
         source_idx = idxs[:sample_num]        
         
         source = items[source_idx][:seq_len]
-        masked_batches[i][source] = 0
+        # masked_batches[i][source] = 0
+        input_masks[i, :sample_num] = 0.
 
         if sample_num < seq_len:
             source = F.pad(source, pad=[0, seq_len - sample_num])
 
         sources.append(source)    
     
-    # targets = batches                                          # [batch_size, ntokens]
-    targets = masked_batches
+    targets = batches                                          # [batch_size, ntokens]
+    # targets = masked_batches
     sources = torch.stack(sources).permute((1,0))              # [seq_len, batch_size]
+    input_masks = input_masks.bool()
     
-    return sources, targets #, masked_targets
+    return sources, targets, input_masks #, masked_targets
 
 def get_eval_batch(data_tr, user_idx, seq_len=100):
     sources = []
@@ -62,7 +65,8 @@ def get_eval_batch(data_tr, user_idx, seq_len=100):
     zero_tokens = torch.zeros([batch_size, 1]).to(device)
     batches_tr = torch.Tensor(data_tr[user_idx].toarray()).to(device)     # [batch_size, ntokens-1]
     batches_tr = torch.cat((zero_tokens, batches_tr), 1)                  # [batch_size, ntokens]
-    masked_batches = torch.clone(batches_tr)
+    input_masks = torch.ones([batch_size, seq_len]).to(device)
+    # masked_batches = torch.clone(batches_tr)
     # batches_tr = data_tr[user_idx]
     # batches_te = torch.Tensor(data_te[user_idx].toarray()).to(device)     # [batch_size, ntokens-1]
     # batches_te = torch.cat((zero_tokens, batches_te), 1)                  # [batch_size, ntokens]
@@ -80,7 +84,8 @@ def get_eval_batch(data_tr, user_idx, seq_len=100):
             source_idx = idxs[:seq_len]
             source = source[source_idx]
         
-        masked_batches[i][source] = 0.
+        # masked_batches[i][source] = 0.
+        input_masks[i][:item_num] = 0.
         nonzeroidxs.append(source)
 
         if item_num < seq_len:
@@ -88,10 +93,12 @@ def get_eval_batch(data_tr, user_idx, seq_len=100):
 
         sources.append(source)
         
-    targets = masked_batches                                          # [batch_size, ntokens]
+    # targets = masked_batches                                          # [batch_size, ntokens]
+    targets = batches_tr
     sources = torch.stack(sources).permute((1,0))                 # [seq_len, batch_size]
+    input_masks = input_masks.bool()
     
-    return sources, targets, nonzeroidxs
+    return sources, targets, nonzeroidxs, input_masks
 
 
 def train(model, n_train, batch_size, nseq, train_data, epoch, criterion, optimizer, scheduler):
@@ -105,9 +112,9 @@ def train(model, n_train, batch_size, nseq, train_data, epoch, criterion, optimi
         useridx = idxlist[i:(i+batch_size)]
         # chunk_size = len(useridx)
 
-        data, targets = get_train_batch(train_data, useridx, seq_len=nseq)
+        data, targets, masks = get_train_batch(train_data, useridx, seq_len=nseq)
         optimizer.zero_grad()
-        output = model(data)
+        output = model(data, masks)
         
         loss = criterion(output, targets)
         loss.backward()
@@ -150,8 +157,8 @@ def evaluate(model, num_data, eval_batch_size, nseq, eval_data_tr, eval_data_te,
         for i in tqdm(range(0, num_data, eval_batch_size), desc='Validating..'):
             useridx = idxlist[i : (i+eval_batch_size)]            
 
-            data, targets, nonzeroidxs = get_eval_batch(eval_data_tr, useridx, seq_len=nseq)
-            output = model(data)            
+            data, targets, nonzeroidxs, mask = get_eval_batch(eval_data_tr, useridx, seq_len=nseq)
+            output = model(data, mask)            
             
             total_loss += len(data) * criterion(output, targets).item()
             pred = (output > 0.5).float().cpu()
@@ -159,15 +166,15 @@ def evaluate(model, num_data, eval_batch_size, nseq, eval_data_tr, eval_data_te,
             for j in range(len(pred)):
                 pred[j][nonzeroidxs[j]] = 0.
             
-            if i % print_iter == 0:
-                print("-- input data --")
-                print(data.T[0].flatten())
-                print("-- ground input data --")
-                print(eval_data_tr[useridx][0].nonzero()[1])
-                print("-- target data --")
-                print(targets[0].nonzero().flatten())
-                print("-- ground truth data --")
-                print(np.array(eval_data_te[useridx][0].nonzero()[1]) + 1.0)
+            # if i % print_iter == 0:
+            #     print("-- input data --")
+            #     print(data.T[0].flatten())
+            #     print("-- ground input data --")
+            #     print(eval_data_tr[useridx][0].nonzero()[1])
+            #     print("-- target data --")
+            #     print(targets[0].nonzero().flatten())
+            #     print("-- ground truth data --")
+            #     print(np.array(eval_data_te[useridx][0].nonzero()[1]) + 1.0)
 
             ndcg100 = NDCG_score(pred, targets, eval_data_te[useridx], k=100)
             ndcg50 = NDCG_score(pred, targets, eval_data_te[useridx], k=50)
@@ -233,10 +240,10 @@ def main():
     model = TransformerCF(ntokens, emsize, nhead, nhid, nlayers, nseq, dropout, use_posenc=True).to(device)
 
     criterion = torch.nn.BCELoss()
-    lr = 5. # Defualt : 5.0
+    lr = 1. # Defualt : 5.0
     optimizer = torch.optim.SGD(model.parameters(), lr=lr)
     # scheduler = None
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 0.1, gamma=0.95)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 0.01, gamma=0.995)
 
     for epoch in range(1, epochs + 1):
         epoch_start_time = time.time()        

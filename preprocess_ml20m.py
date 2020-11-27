@@ -27,7 +27,7 @@ def get_count(tp, id):
     count = playcount_groupbyid.size()
     return count
 
-def filter_triplets(tp, min_uc=5, min_sc=0):
+def filter_triplets(tp, min_uc=5, min_sc=1):
     # Only keep the triplets for items which were clicked on by at least min_sc users. 
     if min_sc > 0:
         itemcount = get_count(tp, 'movieId')
