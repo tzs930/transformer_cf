@@ -187,6 +187,7 @@ def evaluate(model, num_data, eval_batch_size, nseq, eval_data_tr, eval_data_te,
             # recalls50.extend(recall50)
         
             del data, targets, pred, nonzeroidxs
+            
         del idxlist
 
     ndcg100 = np.nanmean(ndcgs100)
@@ -232,18 +233,18 @@ def main():
     emsize = 256
     nhid = 256
     nlayers = 2
-    nhead = 4
-    nseq = 50
+    nhead = 8 
+    nseq = 200
     dropout = 0.2
     save_dir = 'checkpoints'
 
     model = TransformerCF(ntokens, emsize, nhead, nhid, nlayers, nseq, dropout, use_posenc=True).to(device)
 
     criterion = torch.nn.BCELoss()
-    lr = 1. # Defualt : 5.0
+    lr = 0.5 # Defualt : 5.0
     optimizer = torch.optim.SGD(model.parameters(), lr=lr)
     # scheduler = None
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 0.01, gamma=0.995)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 0.1, gamma=0.995)
 
     for epoch in range(1, epochs + 1):
         epoch_start_time = time.time()        
